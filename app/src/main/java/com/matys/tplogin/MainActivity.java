@@ -1,104 +1,90 @@
 package com.matys.tplogin;
 
+import androidx.appcompat.app.AppCompatActivity;
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
-import androidx.appcompat.app.AppCompatActivity;
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
-import com.android.volley.Response;
-import com.android.volley.VolleyError;
-import com.android.volley.toolbox.JsonObjectRequest;
+import com.android.volley.toolbox.StringRequest;
 import com.android.volley.toolbox.Volley;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class MainActivity extends AppCompatActivity {
+    EditText username, password;
+    Button login;
+    RequestQueue requestQueue;
 
-    private EditText emailEditText, passwordEditText;
-    private Button loginButton;
+    private static final String LOGIN_URL = "https://gsbcr.alwaysdata.net/Api/loginAPI.php";
+    private static final String STATUS = "status";
+    private static final int SUCCESS_STATUS = 200;
 
-    // Déclaration de l'URL de l'API
-    private static final String API_URL = "https://gsbcr.alwaysdata.net/Api/loginAPI.php";
+    public static final String EXTRA_MESSAGE = "com.example.myapplication.extra.MESSAGE";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        emailEditText = findViewById(R.id.emailEditText);
-        passwordEditText = findViewById(R.id.passwordEditText);
-        loginButton = findViewById(R.id.loginButton);
+        username = findViewById(R.id.emailEditText);
+        password = findViewById(R.id.passwordEditText);
+        login = findViewById(R.id.loginButton);
+        requestQueue = Volley.newRequestQueue(this);
 
-        loginButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                String email = emailEditText.getText().toString();
-                String password = passwordEditText.getText().toString();
-
-                // Appel de l'API pour l'authentification
-                authenticateUser(email, password);
+        login.setOnClickListener(v -> {
+            String userVar = username.getText().toString().trim();
+            String passVar = password.getText().toString().trim();
+            if (userVar.isEmpty() || passVar.isEmpty()) {
+                Toast.makeText(getApplicationContext(), "Email and Password cannot be blank", Toast.LENGTH_SHORT).show();
+            } else {
+                loginRequest(userVar, passVar);
             }
         });
     }
 
-    private void authenticateUser(String email, String password) {
-        // Création des données JSON pour l'authentification
-        JSONObject requestData = new JSONObject();
-        try {
-            requestData.put("email", email);
-            requestData.put("password", password);
-        } catch (JSONException e) {
-            e.printStackTrace();
-            return;
-        }
-
-        // Création de la file d'attente de requêtes Volley
-        RequestQueue queue = Volley.newRequestQueue(this);
-
-        // Création de la requête JSON POST
-        JsonObjectRequest jsonObjectRequest = new JsonObjectRequest
-                (Request.Method.POST, API_URL, requestData, new Response.Listener<JSONObject>() {
-
-                    @Override
-                    public void onResponse(JSONObject response) {
-                        try {
-                            // Vérification de la réponse de l'API
-                            boolean success = response.getBoolean("success");
-
-                            if (success) {
-                                // Connexion réussie, passer à l'activité suivante avec les données de l'utilisateur
+    private void loginRequest(String userVar, String passVar) {
+        StringRequest stringRequest = new StringRequest(Request.Method.POST, LOGIN_URL,
+                response -> {
+                    try {
+                        if (response != null && !response.trim().isEmpty()) {
+                            JSONObject jsonObject = new JSONObject(response.trim());
+                            if (jsonObject.has(STATUS) && jsonObject.getInt(STATUS) == SUCCESS_STATUS) {
+                                Toast.makeText(MainActivity.this, "Login successful", Toast.LENGTH_SHORT).show();
                                 Intent intent = new Intent(MainActivity.this, UserInfoActivity.class);
-                                intent.putExtra("token", response.getString("token"));
-                                intent.putExtra("mdp", response.getString("mot_de_passe"));
-                                intent.putExtra("email", response.getString("email"));
-                                intent.putExtra("role", response.getString("role"));
-                                intent.putExtra("id_region", response.getString("id_region"));
-                                intent.putExtra("id_user", response.getString("id_user"));
+                                String message = jsonObject.toString();
+                                intent.putExtra(EXTRA_MESSAGE, message);
                                 startActivity(intent);
                             } else {
-                                // Afficher un message d'erreur en cas d'échec de connexion
-                                Toast.makeText(MainActivity.this, "Identifiants incorrects", Toast.LENGTH_SHORT).show();
+                                Toast.makeText(MainActivity.this, "Incorrect username or password", Toast.LENGTH_LONG).show();
                             }
-                        } catch (JSONException e) {
-                            e.printStackTrace();
-                            Toast.makeText(MainActivity.this, "Erreur de réponse de l'API", Toast.LENGTH_SHORT).show();
+                        } else {
+                            Toast.makeText(MainActivity.this, "Empty server response", Toast.LENGTH_LONG).show();
                         }
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                        Toast.makeText(MainActivity.this, "Failed to parse server response", Toast.LENGTH_LONG).show();
                     }
-                }, new Response.ErrorListener() {
-
-                    @Override
-                    public void onErrorResponse(VolleyError error) {
-                        // Gestion des erreurs
-                        error.printStackTrace();
-                        Toast.makeText(MainActivity.this, "Erreur de connexion à l'API", Toast.LENGTH_SHORT).show();
-                    }
-                });
-
-        // Ajout de la requête à la file d'attente
-        queue.add(jsonObjectRequest);
+                },
+                error -> {
+                    Toast.makeText(MainActivity.this, "Failed to connect to server. Please check your internet connection and try again.", Toast.LENGTH_LONG).show();
+                }) {
+            @Override
+            protected Map<String, String> getParams() {
+                Map<String, String> params = new HashMap<>();
+                params.put("email", userVar);
+                params.put("password", passVar);
+                return params;
+            }
+        };
+        requestQueue.add(stringRequest);
     }
 }
+
